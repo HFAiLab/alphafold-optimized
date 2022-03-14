@@ -1,0 +1,10 @@
+name: train_alphafold@gtc
+code:
+  directory: /ceph-jd/prod/jupyter/zhangmingchuan/notebooks/yinghuo-alphafold/train_fold_gtc
+  entrypoint: run_train_gtc.py
+  parameters:
+resource:
+  - container: cuda_11
+  - node_count: 32
+    group: jd_a100
+priority: 40
