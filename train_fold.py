@@ -1,4 +1,3 @@
- # from __future__ import *
 import argparse
 import os
 import logging
@@ -17,10 +16,9 @@ from openfold.utils.loss import AlphaFoldLoss
 from openfold.utils.seed import seed_everything
 from openfold.utils.tensor_utils import tensor_tree_map
 
-# 引入 hfreduce
 LOG_ERROR = 4
 import hfreduce.torch as hfr
-hfr.set_log_level(LOG_ERROR)
+hfr.set_log_level(LOG_ERROR) # 
 
 def hfai_DDP(model, registry_host, port, local_rank, procs_per_node, node_rank, node_cnt):
     print('init ddp:', registry_host, port, local_rank, procs_per_node, node_rank, node_cnt, flush=True)
@@ -51,7 +49,8 @@ def main(local_rank, args):
     rank = int(os.environ['RANK'])
     torch.distributed.init_process_group(backend='nccl', init_method='tcp://{}:{}'.format(ip, port), world_size=hosts*args.gpus, rank=rank*args.gpus+local_rank)    
     
-    # torch.cuda.set_device(local_rank)
+    if not args.use_hfreduce:
+        torch.cuda.set_device(local_rank)
 
     config = model_config(
         "model_1", 
@@ -61,7 +60,10 @@ def main(local_rank, args):
     
     device = torch.device("cuda", 0)
     model = AlphaFold(config).cuda()
-    model = hfai_DDP(model, ip, int(port) + 1, local_rank, args.gpus, rank, hosts)
+    if args.use_hfreduce:
+        model = hfai_DDP(model, ip, int(port) + 1, local_rank, args.gpus, rank, hosts)
+    else:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
     
     loss_func = AlphaFoldLoss(config.loss).cuda()
     modelEMA = ExponentialMovingAverage(
@@ -83,7 +85,6 @@ def main(local_rank, args):
     log.setLevel(logging.INFO)
     if local_rank == 0:
         log.info(f'Preparing training data')
-
     
     data_module = OpenFoldDataModule(
         config=config.data, 
@@ -110,7 +111,8 @@ def main(local_rank, args):
             modelEMA.update(model)
             loss = loss_func(output, target)
             loss.backward()
-            model.sync_grad()
+            if args.use_hfreduce:
+                model.sync_grad()
             optimizer.step()
             
             if local_rank == 0:
@@ -233,6 +235,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--script_modules", type=bool_type, default=False,
         help="Whether to TorchScript eligible components of them model"
+    )
+    parser.add_argument(
+        "--use_hfreduce", type=bool_type, default=True,
+        help="Whether to use HFReduce instead of NCCL or not"
     )
     parser = pl.Trainer.add_argparse_args(parser)
    
