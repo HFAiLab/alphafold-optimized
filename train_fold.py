@@ -5,8 +5,8 @@ import logging
 import pytorch_lightning as pl
 import torch
 from hfai.nn import to_hfai
-import hfai.nn.parallel.DistributedDataParallel as hfai_DDP
-import torch.nn.parallel.DistributedDataParallel as torch_DDP
+from hfai.nn.parallel import DistributedDataParallel as hfai_DDP
+from torch.nn.parallel import DistributedDataParallel as torch_DDP
 
 from openfold.config import model_config
 from openfold.data.data_modules import (
@@ -19,14 +19,13 @@ from openfold.utils.loss import AlphaFoldLoss
 from openfold.utils.seed import seed_everything
 from openfold.utils.tensor_utils import tensor_tree_map    
 
+LOG_ERROR = 4
+import hfreduce.torch as hfr
+hfr.set_log_level(LOG_ERROR)
+
 def main(local_rank, args):
     if(args.seed is not None):
         seed_everything(args.seed)
-    if args.use_hfai:
-        DDP = hfai_DDP
-    else:
-        DDP = torch_DDP
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(local_rank)
     
     ip = os.environ['MASTER_IP']
     port = os.environ['MASTER_PORT']
@@ -42,18 +41,19 @@ def main(local_rank, args):
         low_prec=(args.precision == 16)
     ) 
     
-    device = torch.device("cuda", 0)
     model = AlphaFold(config).cuda()
     if args.use_hfai:
-        model = to_hfai(model)
-    model = DDP(model, device_ids=[local_rank])
+        model = to_hfai(model, contiguous_param=False)
+        model = hfai_DDP(model, device_ids=[local_rank])
+    else:
+        model = torch_DDP(model, device_ids=[local_rank])
     
     loss_func = AlphaFoldLoss(config.loss).cuda()
     modelEMA = ExponentialMovingAverage(
         model=model,
         decay=config.ema.decay
     )
-    modelEMA.to(device)
+    modelEMA.to(torch.device("cuda", local_rank))
     learning_rate = 1e-3
     eps = 1e-8
     optimizer = torch.optim.Adam(
@@ -77,7 +77,6 @@ def main(local_rank, args):
     data_module.prepare_data()
     data_module.setup()
     
-    
     epoch_num = 10
     for epoch in range(epoch_num):
         if local_rank == 0:
@@ -87,7 +86,7 @@ def main(local_rank, args):
         dataloader = data_module._gen_dataloader("train", replace_ddp_sampler=True)
         for idx, batch in enumerate(dataloader):
             for feature in batch:
-                batch[feature] = batch[feature].cuda()
+                batch[feature] = batch[feature].cuda(non_blocking=True)
             model.zero_grad()
             output = model(batch)
             target = tensor_tree_map(lambda t: t[..., -1], batch)
@@ -218,7 +217,7 @@ if __name__ == "__main__":
         help="Whether to TorchScript eligible components of them model"
     )
     parser.add_argument(
-        "--use_hfai", type=bool_type, default=True,
+        "--use_hfai", action="store_true",
         help="Whether to use hfai.nn's optimized DDP and primitives or not"
     )
     parser = pl.Trainer.add_argparse_args(parser)

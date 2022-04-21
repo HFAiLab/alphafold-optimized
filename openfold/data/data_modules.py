@@ -8,10 +8,10 @@ import pickle
 from typing import Optional, Sequence
 
 import ml_collections as mlc
-import numpy as np
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import RandomSampler
+from ffrecord import FileReader
 
 from openfold.data import (
     data_pipeline,
@@ -90,6 +90,9 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         self.treat_pdb_as_distillation = treat_pdb_as_distillation
         self.mode = mode
         self._output_raw = _output_raw
+        self.mmcif_reader = FileReader(os.path.join(self.data_dir, "mmcif_processed.ffr"))
+        with open(os.path.join(self.data_dir, "mmcif_processed_index.pkl"), "rb") as fp:
+            self.mmcif_index = pickle.load(fp)
 
         valid_modes = ["train", "eval", "predict"]
         if(mode not in valid_modes):
@@ -124,15 +127,14 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
 
         self.data_pipeline = data_pipeline.DataPipeline(
             template_featurizer=template_featurizer,
+            alignment_dir = alignment_dir,
+            data_dir = data_dir,
         )
 
         if(not self._output_raw):
             self.feature_pipeline = feature_pipeline.FeaturePipeline(config) 
 
-    def _parse_mmcif(self, path, file_id, chain_id, alignment_dir):
-        with open(path, 'r') as f:
-            mmcif_string = f.read()
-
+    def _parse_mmcif(self, mmcif_string, file_id, chain_id, alignment_dir):
         mmcif_object = mmcif_parsing.parse(
             file_id=file_id, mmcif_string=mmcif_string
         )
@@ -164,24 +166,31 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 file_id, = spl
                 chain_id = None
 
-            path = os.path.join(self.data_dir, file_id)
-            if(os.path.exists(path + ".cif")):
-                data = self._parse_mmcif(
-                    path + ".cif", file_id, chain_id, alignment_dir
-                )
-            elif(os.path.exists(path + ".core")):
-                data = self.data_pipeline.process_core(
-                    path + ".core", alignment_dir
-                )
-            elif(os.path.exists(path + ".pdb")):
-                data = self.data_pipeline.process_pdb(
-                    pdb_path=path + ".pdb",
-                    alignment_dir=alignment_dir,
-                    is_distillation=self.treat_pdb_as_distillation,
-                    chain_id=chain_id,
-                )
-            else:
-                raise ValueError(f"Invalid file type, path:{path}")
+            # path = os.path.join(self.data_dir, file_id)
+            idx = [self.mmcif_index[file_id]]
+            data = self.mmcif_reader.read(idx)
+            mmcif_string = pickle.loads(data[0])
+            data = self._parse_mmcif(
+                mmcif_string, file_id, chain_id, "_".join([file_id, chain_id])
+            )
+
+            # if(os.path.exists(path + ".cif")):
+            #     data = self._parse_mmcif(
+            #         mmcif_string, file_id, chain_id, alignment_dir
+            #     )
+            # elif(os.path.exists(path + ".core")):
+            #     data = self.data_pipeline.process_core(
+            #         path + ".core", alignment_dir
+            #     )
+            # elif(os.path.exists(path + ".pdb")):
+            #     data = self.data_pipeline.process_pdb(
+            #         pdb_path=path + ".pdb",
+            #         alignment_dir=alignment_dir,
+            #         is_distillation=self.treat_pdb_as_distillation,
+            #         chain_id=chain_id,
+            #     )
+            # else:
+            #     raise ValueError(f"Invalid file type, path:{path}")
         else:
             path = os.path.join(name, name + ".fasta")
             data = self.data_pipeline.process_fasta(
@@ -518,7 +527,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
             "persistent_workers":True,
             "pin_memory":True,
             "collate_fn":batch_collator,
-            "prefetch_factor":2,
+            "prefetch_factor":4,
         }
         if replace_ddp_sampler:
             dataloader_args["sampler"] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=True)

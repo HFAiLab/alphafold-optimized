@@ -27,6 +27,8 @@ from openfold.np import residue_constants, protein
 from openfold.config import model_config
 
 from threading import Thread
+from ffrecord import FileReader
+import pickle
 
 FeatureDict = Mapping[str, np.ndarray]
 
@@ -558,32 +560,56 @@ class DataPipeline:
     def __init__(
         self,
         template_featurizer: Optional[templates.TemplateHitFeaturizer],
+        alignment_dir,
+        data_dir,
     ):
         self.template_featurizer = template_featurizer
+        self.alignment_dir = alignment_dir
+        self.data_dir = data_dir
+        self.bfd_reader = FileReader(os.path.join(self.alignment_dir, "bfd_small_hits.ffr"))
+        self.mgnify_reader = FileReader(os.path.join(self.alignment_dir, "mgnify_hits.ffr"))
+        self.pdb70_reader = FileReader(os.path.join(self.alignment_dir, "pdb70_hits.ffr"))
+        self.uniref90_reader = FileReader(os.path.join(self.alignment_dir, "uniref90_hits.ffr"))
+        with open(os.path.join(self.data_dir, "mmcif_processed_index.pkl"), "rb") as fp:
+            self.mmcif_index = pickle.load(fp)
+        with open(os.path.join(self.alignment_dir, "alignments_index.pkl"), "rb") as fp:
+            self.align_index = pickle.load(fp)
+
 
     def _parse_msa_data(
         self,
         alignment_dir: str,
     ) -> Mapping[str, Any]:
         msa_data = {}
-        for f in os.listdir(alignment_dir):
-            path = os.path.join(alignment_dir, f)
-            ext = os.path.splitext(f)[-1]
+        idx = self.align_index[alignment_dir]
+        data = self.mgnify_reader.read([idx])
+        msa, deletion_matrix = parsers.parse_a3m(pickle.loads(data[0]))
+        msa_data["mgnify_hits.a3m"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        data = self.uniref90_reader.read([idx])
+        msa, deletion_matrix = parsers.parse_a3m(pickle.loads(data[0]))
+        msa_data["uniref90_hits.a3m"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        data = self.bfd_reader.read([idx])
+        msa, deletion_matrix, _ = parsers.parse_stockholm(pickle.loads(data[0]))
+        msa_data["small_bfd_hits.sto"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        
+        # for f in os.listdir(alignment_dir):
+        #     path = os.path.join(alignment_dir, f)
+        #     ext = os.path.splitext(f)[-1]
 
-            if(ext == ".a3m"):
-                with open(path, "r") as fp:
-                    msa, deletion_matrix = parsers.parse_a3m(fp.read())
-                data = {"msa": msa, "deletion_matrix": deletion_matrix}
-            elif(ext == ".sto"):
-                with open(path, "r") as fp:
-                    msa, deletion_matrix, _ = parsers.parse_stockholm(
-                        fp.read()
-                    )
-                data = {"msa": msa, "deletion_matrix": deletion_matrix}
-            else:
-                continue
+        #     if(ext == ".a3m"):
+        #         with open(path, "r") as fp:
+        #             msa, deletion_matrix = parsers.parse_a3m(fp.read())
+        #         data = {"msa": msa, "deletion_matrix": deletion_matrix}
+        #     elif(ext == ".sto"):
+        #         with open(path, "r") as fp:
+        #             msa, deletion_matrix, _ = parsers.parse_stockholm(
+        #                 fp.read()
+        #             )
+        #         data = {"msa": msa, "deletion_matrix": deletion_matrix}
+        #     else:
+        #         continue
             
-            msa_data[f] = data
+        #     msa_data[f] = data
 
         return msa_data
 
@@ -592,14 +618,19 @@ class DataPipeline:
         alignment_dir: str,
     ) -> Mapping[str, Any]:
         all_hits = {}
-        for f in os.listdir(alignment_dir):
-            path = os.path.join(alignment_dir, f)
-            ext = os.path.splitext(f)[-1]
+        idx = self.align_index[alignment_dir]
+        data = self.pdb70_reader.read([idx])
+        hits = parsers.parse_hhr(pickle.loads(data[0]))
+        all_hits["pdb70_hits.hhr"] = hits
+        
+        # for f in os.listdir(alignment_dir):
+        #     path = os.path.join(alignment_dir, f)
+        #     ext = os.path.splitext(f)[-1]
 
-            if(ext == ".hhr"):
-                with open(path, "r") as fp:
-                    hits = parsers.parse_hhr(fp.read())
-                all_hits[f] = hits
+        #     if(ext == ".hhr"):
+        #         with open(path, "r") as fp:
+        #             hits = parsers.parse_hhr(fp.read())
+        #         all_hits[f] = hits
 
         return all_hits
 

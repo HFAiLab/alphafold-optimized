@@ -4,3 +4,6 @@
 
 ## 使用方式
 使用HighFlyer-AILab Jupyter界面打开run_train.py，在右侧发起任务即可
+
+## 训练优化
+

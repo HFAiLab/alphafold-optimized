@@ -327,6 +327,7 @@ def parse(
         
         return result
     except Exception as e:  # pylint:disable=broad-except
+        print(e)
         errors[(file_id, "")] = e
         if not catch_all_errors:
             raise

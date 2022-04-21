@@ -2,3 +2,5 @@
 __pycache__
 openfold/__pycache__
 openfold/.ipynb_checkpoints
+run_process.py
+gen_processed_mmcif.py
