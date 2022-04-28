@@ -42,6 +42,11 @@ def main(local_rank, args):
     ) 
     
     model = AlphaFold(config).cuda()
+    if not os.path.exists(args.ckpt_path):
+        os.mkdir(args.ckpt_path)
+    if args.load_checkpoint:
+        model.load_state_dict(torch.load(os.path.join(args.ckpt_path, "alphafold.pth")))
+
     if args.use_hfai:
         model = to_hfai(model, contiguous_param=False)
         model = hfai_DDP(model, device_ids=[local_rank])
@@ -61,6 +66,10 @@ def main(local_rank, args):
         lr=learning_rate, 
         eps=eps
     )
+
+    if args.load_checkpoint:
+        modelEMA.load_state_dict(torch.load(os.path.join(args.ckpt_path, "alphafold_ema.pth")))
+        optimizer.load_state_dict(torch.load(os.path.join(args.ckpt_path, "optimizer.pth")))
 
     log = logging.getLogger()
     handler = logging.StreamHandler()
@@ -98,7 +107,12 @@ def main(local_rank, args):
             if local_rank == 0:
                 batch_loss.append(loss.item())
                 log.info(f'Epoch: {epoch} Step: {idx+1}/{len(dataloader)} Loss: {round(sum(batch_loss)/len(batch_loss), 4)}')
-                    
+        
+        if local_rank == 0:
+            torch.save(modelEMA.state_dict(), os.path.join(args.ckpt_path, "alphafold_ema.pth"))
+            torch.save(model.state_dict(), os.path.join(args.ckpt_path, "alphafold.pth"))
+            torch.save(optimizer.state_dict(), os.path.join(args.ckpt_path, "optimizer.pth"))
+
 
 
 def bool_type(bool_str: str):
@@ -219,6 +233,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use_hfai", action="store_true",
         help="Whether to use hfai.nn's optimized DDP and primitives or not"
+    )
+    parser.add_argument(
+        "--load_checkpoint", action="store_true",
+        help="Whether to resume training from checkpoint"
+    )
+    parser.add_argument(
+        "--ckpt_path", type=str, default="./checkpoint",
+        help="The path to save model checkpoints"
     )
     parser = pl.Trainer.add_argparse_args(parser)
    

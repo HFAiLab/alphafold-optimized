@@ -27,7 +27,7 @@ def main(args):
     model = AlphaFold(config).to(device)
     model = model.eval()
     # import_jax_weights_(model, args.param_path, version=args.model_name)
-    if "EMA" in args.param_path:
+    if "ema" in args.param_path:
         model.load_state_dict(torch.load(args.param_path)["params"])
     else:
         model.load_state_dict(torch.load(args.param_path))

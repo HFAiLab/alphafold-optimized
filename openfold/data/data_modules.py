@@ -90,8 +90,9 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         self.treat_pdb_as_distillation = treat_pdb_as_distillation
         self.mode = mode
         self._output_raw = _output_raw
-        self.mmcif_reader = FileReader(os.path.join(self.data_dir, "mmcif_processed.ffr"))
-        with open(os.path.join(self.data_dir, "mmcif_processed_index.pkl"), "rb") as fp:
+        TEMP_DIR = "../data/pdb_mmcif/"
+        self.mmcif_reader = FileReader(os.path.join(TEMP_DIR, "mmcifs.ffr"))
+        with open(os.path.join(TEMP_DIR, "mmcifs_index.pk"), "rb") as fp:
             self.mmcif_index = pickle.load(fp)
 
         valid_modes = ["train", "eval", "predict"]
@@ -174,23 +175,6 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 mmcif_string, file_id, chain_id, "_".join([file_id, chain_id])
             )
 
-            # if(os.path.exists(path + ".cif")):
-            #     data = self._parse_mmcif(
-            #         mmcif_string, file_id, chain_id, alignment_dir
-            #     )
-            # elif(os.path.exists(path + ".core")):
-            #     data = self.data_pipeline.process_core(
-            #         path + ".core", alignment_dir
-            #     )
-            # elif(os.path.exists(path + ".pdb")):
-            #     data = self.data_pipeline.process_pdb(
-            #         pdb_path=path + ".pdb",
-            #         alignment_dir=alignment_dir,
-            #         is_distillation=self.treat_pdb_as_distillation,
-            #         chain_id=chain_id,
-            #     )
-            # else:
-            #     raise ValueError(f"Invalid file type, path:{path}")
         else:
             path = os.path.join(name, name + ".fasta")
             data = self.data_pipeline.process_fasta(

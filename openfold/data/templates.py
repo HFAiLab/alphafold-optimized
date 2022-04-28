@@ -1007,12 +1007,6 @@ class TemplateHitFeaturizer:
         # Replace original with ffrecord
         self._mmcif_dir = os.path.abspath(mmcif_dir)
         
-        # Original cif check
-        # self._mmcif_dir = mmcif_dir
-        # if not glob.glob(os.path.join(self._mmcif_dir, "*.cif")):
-        #     logging.error("Could not find CIFs in %s", self._mmcif_dir)
-        #     raise ValueError(f"Could not find CIFs in {self._mmcif_dir}")
-
         try:
             self._max_template_date = datetime.datetime.strptime(
                 max_template_date, "%Y-%m-%d"

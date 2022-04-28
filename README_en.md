@@ -1,36 +1,38 @@
 # Alphafold Optimized
 
-[简体中文][[English]](README_en.md)
+[English][[简体中文]](README.md)
 
-Alphafold 2是Deepmind在2021年7月发布的蛋白质结构预测模型，其在CASP14 Challenge上取得了90的TM Score，是目前蛋白质结构预测的SOTA水平。
+Alphafold 2 is a model for protein structure prediction, released by DeepMind in July 2021. It reached a TM Score of 90 in CASP14 Challenge, which is the SOTA of protein structure prediction task.
 
-本项目实现了一个性能优化版的Alphafold，大幅加速了Alphafold模型的训练。项目基于Openfold实现的Pytorch版Alphafold进行优化，通过对数据处理、读取的优化以及hfai.nn提供的算子优化提升了模型的整体训练性能，在128卡训练时GPU利用率可以达到90%以上（相比朴素的Alphafold版本提升了50%以上）。
+In this project, we optimized the training speed of Alphafold. The model is built upon Openfold's pytorch version of Alphafold, and we speed up training by optimizing data processing, data loading, and CUDA operator optimization provided by hfai.nn module. 
 
-## 使用方式
 
-### 环境配置
+## Usage
 
-### 数据预处理
-Alphafold Optimized使用的是已经预处理后的数据集，可以从OSS下载。
+### Environment Setup
 
-### 模型训练
+### Data Preprocessing
 
-Alphafold模型的训练对显存的要求较高，至少需要22GB的GPU显存进行训练。
+Alphafold Optimized uses the preprocessed dataset which can be downloaded from OSS.
 
-提交任务至萤火集群：
+### Model Training
+
+Training Alphafold requires at least 22GB of GPU memory.
+
+Run the model with high-flyer's yinghuo AI-HPC:
 
 ```shell
 hfai python run_train.py -- -n 4 -p 30
 ```
 
-本地运行：
+Run training locally:
 
 ```shell
 source hfai_env openfold38
 python train_fold.py /3fs-jd/prod/platform_team/dataset/alphafold/pdb_mmcif_processed /3fs-jd/prod/platform_team/dataset/alphafold/alignments ../data/pdb_mmcif/ output 2021-10-10 --template_release_dates_cache_path ../mmcif_cache2.json --precision 32 --gpus 1 --num_nodes 1 --seed 41 --train_mapping_path ../full_dataset/final_mapping.json --use_hfai
 ```
 
-### 模型推理
+### Model Inference
 
 ```shell
 source hfai_env openfold38
