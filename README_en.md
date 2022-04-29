@@ -4,7 +4,7 @@ English | [简体中文](README.md)
 
 ![model_structure](imgs/alphafold_structure.png)
 
-In this project, we optimized the training speed of Alphafold. The model is built upon [Openfold](https://github.com/aqlaboratory/openfold)'s pytorch version of Alphafold, and we speed up training by optimizing data processing, data loading, and CUDA operator optimization provided by hfai.nn module. 
+In this project, we optimized the training of Alphafold. The optimization is based on [Openfold](https://github.com/aqlaboratory/openfold)'s pytorch version of Deepmind's Alphafold, and we speed up training by optimizing data processing, data loading, and using the high performance deep learning primitives provided by hfai.nn module. 
 
 
 ## Usage
