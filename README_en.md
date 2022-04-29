@@ -31,7 +31,6 @@ hfai python run_train.py -- -n 16 -p 30
 Run training locally:
 
 ```shell
-source hfai_env openfold38
 python train_fold.py \
 ./data/processed_data/pdb_mmcif_processed \
 ./data/processed_data/alignments \

@@ -29,7 +29,6 @@ hfai python run_train.py -- -n 16 -p 30
 本地运行：
 
 ```shell
-source hfai_env openfold38
 python train_fold.py \
 ./data/processed_data/pdb_mmcif_processed \
 ./data/processed_data/alignments \
@@ -43,7 +42,6 @@ output 2021-10-10 \
 ### 模型推理
 
 ```shell
-source hfai_env openfold38
 python run_pretrained_openfold.py example_data/fasta/1ak0_1_A.fasta \
     data/uniref90/uniref90.fasta \
     data/mgnify/mgy_clusters_2018_12.fa \
