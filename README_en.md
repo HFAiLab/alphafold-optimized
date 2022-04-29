@@ -25,14 +25,14 @@ Training Alphafold requires at least 22GB of GPU memory.
 Run the model with high-flyer's yinghuo AI-HPC:
 
 ```shell
-hfai python run_train.py -- -n 4 -p 30
+hfai python run_train.py -- -n 16 -p 30
 ```
 
 Run training locally:
 
 ```shell
 source hfai_env openfold38
-python train_fold.py /3fs-jd/prod/platform_team/dataset/alphafold/pdb_mmcif_processed /3fs-jd/prod/platform_team/dataset/alphafold/alignments ../data/pdb_mmcif/ output 2021-10-10 --template_release_dates_cache_path ../mmcif_cache2.json --precision 32 --gpus 1 --num_nodes 1 --seed 41 --train_mapping_path ../full_dataset/final_mapping.json --use_hfai
+python train_fold.py ./data/processed_data/pdb_mmcif_processed ./data/processed_data/alignments ./data/pdb_mmcif/ output 2021-10-10 --template_release_dates_cache_path ./data/mmcif_cache.json --precision 32 --gpus 1 --num_nodes 1 --seed 41 --train_mapping_path ./data/data_mapping.json --use_hfai
 ```
 
 ### Model Inference
@@ -54,3 +54,28 @@ python run_pretrained_openfold.py example_data/fasta/1ak0_1_A.fasta \
     --kalign_binary_path /ceph-jd/pub/marsV2/lib/conda/envs/openfold_venv/bin/kalign
 
 ```
+
+## Sample
+
+![OpenfoldSample](imgs/openFold_sample.jpg)
+
+## Reference
+
+[Deepmind's Alphafold](https://github.com/deepmind/alphafold)
+
+[Openfold](https://github.com/aqlaboratory/openfold)
+
+## Citation
+
+```bibtex
+@software{Ahdritz_OpenFold_2021,
+  author = {Ahdritz, Gustaf and Bouatta, Nazim and Kadyan, Sachin and Xia, Qinghui and Gerecke, William and AlQuraishi, Mohammed},
+  doi = {10.5281/zenodo.5709539},
+  month = {11},
+  title = {{OpenFold}},
+  url = {https://github.com/aqlaboratory/openfold},
+  year = {2021}
+}
+```
+
+Any work that cites OpenFold should also cite AlphaFold.
