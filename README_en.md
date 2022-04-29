@@ -45,7 +45,6 @@ output 2021-10-10 \
 ### Model Inference
 
 ```shell
-source hfai_env openfold38
 python run_pretrained_openfold.py example_data/fasta/1ak0_1_A.fasta \
     data/uniref90/uniref90.fasta \
     data/mgnify/mgy_clusters_2018_12.fa \
@@ -55,11 +54,10 @@ python run_pretrained_openfold.py example_data/fasta/1ak0_1_A.fasta \
     --output_dir ./ \
     --bfd_database_path data/bfd/bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt \
     --model_device cuda:1 \
-    --jackhmmer_binary_path /ceph-jd/pub/marsV2/lib/conda/envs/openfold_venv/bin/jackhmmer \
-    --hhblits_binary_path /ceph-jd/pub/marsV2/lib/conda/envs/openfold_venv/bin/hhblits \
-    --hhsearch_binary_path /ceph-jd/pub/marsV2/lib/conda/envs/openfold_venv/bin/hhsearch \
-    --kalign_binary_path /ceph-jd/pub/marsV2/lib/conda/envs/openfold_venv/bin/kalign
-
+    --jackhmmer_binary_path ./bin/jackhmmer \
+    --hhblits_binary_path ./bin/hhblits \
+    --hhsearch_binary_path ./bin/hhsearch \
+    --kalign_binary_path ./bin/kalig
 ```
 
 ## Sample
