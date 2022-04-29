@@ -1,7 +1,8 @@
 # Alphafold Optimized
 
-[简体中文][[English]](README_en.md)
+简体中文 | [English](README_en.md)
 
+![model_structure](imgs/alphafold_structure.png)
 
 本项目实现了一个性能优化版的Alphafold，大幅加速了Alphafold模型的训练。基于[Openfold](https://github.com/aqlaboratory/openfold)实现的Pytorch版Alphafold进行优化，通过对数据处理、读取的优化以及hfai.nn提供的算子优化提升了模型的整体训练性能。
 
