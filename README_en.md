@@ -2,14 +2,16 @@
 
 [English][[简体中文]](README.md)
 
-Alphafold 2 is a model for protein structure prediction, released by DeepMind in July 2021. It reached a TM Score of 90 in CASP14 Challenge, which is the SOTA of protein structure prediction task.
 
-In this project, we optimized the training speed of Alphafold. The model is built upon Openfold's pytorch version of Alphafold, and we speed up training by optimizing data processing, data loading, and CUDA operator optimization provided by hfai.nn module. 
+In this project, we optimized the training speed of Alphafold. The model is built upon [Openfold](https://github.com/aqlaboratory/openfold)'s pytorch version of Alphafold, and we speed up training by optimizing data processing, data loading, and CUDA operator optimization provided by hfai.nn module. 
 
 
 ## Usage
 
-### Environment Setup
+### Requirements
+
+    python>=3.8
+    pip install -r requirements.txt
 
 ### Data Preprocessing
 

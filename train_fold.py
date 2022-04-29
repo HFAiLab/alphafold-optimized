@@ -193,10 +193,6 @@ if __name__ == "__main__":
         help="Random seed"
     )
     parser.add_argument(
-        "--deepspeed_config_path", type=str, default=None,
-        help="Path to DeepSpeed config. If not provided, DeepSpeed is disabled"
-    )
-    parser.add_argument(
         "--checkpoint_best_val", type=bool_type, default=True,
         help="""Whether to save the model parameters that perform best during
                 validation"""

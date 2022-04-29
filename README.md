@@ -2,13 +2,15 @@
 
 [简体中文][[English]](README_en.md)
 
-Alphafold 2是Deepmind在2021年7月发布的蛋白质结构预测模型，其在CASP14 Challenge上取得了90的TM Score，是目前蛋白质结构预测的SOTA水平。
 
-本项目实现了一个性能优化版的Alphafold，大幅加速了Alphafold模型的训练。项目基于Openfold实现的Pytorch版Alphafold进行优化，通过对数据处理、读取的优化以及hfai.nn提供的算子优化提升了模型的整体训练性能，在128卡训练时GPU利用率可以达到90%以上（相比朴素的Alphafold版本提升了50%以上）。
+本项目实现了一个性能优化版的Alphafold，大幅加速了Alphafold模型的训练。基于[Openfold](https://github.com/aqlaboratory/openfold)实现的Pytorch版Alphafold进行优化，通过对数据处理、读取的优化以及hfai.nn提供的算子优化提升了模型的整体训练性能。
 
 ## 使用方式
 
-### 环境配置
+### 环境要求
+
+    python>=3.8
+    pip install -r requirements.txt
 
 ### 数据预处理
 Alphafold Optimized使用的是已经预处理后的数据集，可以从OSS下载。

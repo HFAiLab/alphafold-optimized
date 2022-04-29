@@ -322,12 +322,9 @@ def parse(
         # Cache parsing result
         result = ParsingResult(mmcif_object=mmcif_object, errors=errors)
         safe_pickle_dump(cachePath, result)
-        # pickle.dump(result, open(cachePath, "wb"))
-        log.critical(f"Parsing result for {file_id} is cached")
         
         return result
     except Exception as e:  # pylint:disable=broad-except
-        log.critical(f"Error when parsing {file_id}:{e}")
         errors[(file_id, "")] = e
         if not catch_all_errors:
             raise

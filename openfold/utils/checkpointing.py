@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import deepspeed
 import torch
 import torch.utils.checkpoint
 from typing import Any, Tuple, List, Callable
@@ -68,10 +67,7 @@ def checkpoint_blocks(
     elif blocks_per_ckpt < 1 or blocks_per_ckpt > len(blocks):
         raise ValueError("blocks_per_ckpt must be between 1 and len(blocks)")
 
-    if(deepspeed.checkpointing.is_configured()):
-        checkpoint = deepspeed.checkpointing.checkpoint
-    else:
-        checkpoint = torch.utils.checkpoint.checkpoint
+    checkpoint = torch.utils.checkpoint.checkpoint
 
     for s in range(0, len(blocks), blocks_per_ckpt):
         e = s + blocks_per_ckpt
