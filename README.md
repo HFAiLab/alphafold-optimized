@@ -11,7 +11,9 @@
 ### 环境要求
 
     python>=3.8
+    hfai(to be released)
     pip install -r requirements.txt
+
 
 ### 数据预处理
 Alphafold Optimized使用的是已经预处理后的数据集，可以从OSS下载。

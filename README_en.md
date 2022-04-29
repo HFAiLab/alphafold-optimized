@@ -12,7 +12,10 @@ In this project, we optimized the training of Alphafold. The optimization is bas
 ### Requirements
 
     python>=3.8
+    hfai(to be released)
     pip install -r requirements.txt
+
+
 
 ### Data Preprocessing
 
