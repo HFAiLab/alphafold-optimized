@@ -30,7 +30,14 @@ hfai python run_train.py -- -n 16 -p 30
 
 ```shell
 source hfai_env openfold38
-python train_fold.py ./data/processed_data/pdb_mmcif_processed ./data/processed_data/alignments ./data/pdb_mmcif/ output 2021-10-10 --template_release_dates_cache_path ./data/mmcif_cache.json --precision 32 --gpus 1 --num_nodes 1 --seed 41 --train_mapping_path ./data/data_mapping.json --use_hfai
+python train_fold.py \
+./data/processed_data/pdb_mmcif_processed \
+./data/processed_data/alignments \
+./data/pdb_mmcif/ \
+output 2021-10-10 \
+--template_release_dates_cache_path ./data/mmcif_cache.json \
+--precision 32 --gpus 1 --num_nodes 1 --seed 41 \
+--train_mapping_path ./data/data_mapping.json --use_hfai
 ```
 
 ### 模型推理
@@ -76,4 +83,4 @@ python run_pretrained_openfold.py example_data/fasta/1ak0_1_A.fasta \
 }
 ```
 
-引用Openfold的工作同样需要引用Deepmind Alphafold.
+引用Openfold的工作同时需要引用Deepmind Alphafold.

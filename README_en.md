@@ -32,7 +32,14 @@ Run training locally:
 
 ```shell
 source hfai_env openfold38
-python train_fold.py ./data/processed_data/pdb_mmcif_processed ./data/processed_data/alignments ./data/pdb_mmcif/ output 2021-10-10 --template_release_dates_cache_path ./data/mmcif_cache.json --precision 32 --gpus 1 --num_nodes 1 --seed 41 --train_mapping_path ./data/data_mapping.json --use_hfai
+python train_fold.py \
+./data/processed_data/pdb_mmcif_processed \
+./data/processed_data/alignments \
+./data/pdb_mmcif/ \
+output 2021-10-10 \
+--template_release_dates_cache_path ./data/mmcif_cache.json \
+--precision 32 --gpus 1 --num_nodes 1 --seed 41 \
+--train_mapping_path ./data/data_mapping.json --use_hfai
 ```
 
 ### Model Inference
