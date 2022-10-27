@@ -3,10 +3,11 @@ from functools import partial
 import json
 import logging
 import os
-import time
+import ffrecord
 import pickle
 from typing import Optional, Sequence
 
+from hfaidataset import AlphafoldData
 import ml_collections as mlc
 import pytorch_lightning as pl
 import torch
@@ -20,6 +21,145 @@ from openfold.data import (
     templates,
 )
 from openfold.utils.tensor_utils import tensor_tree_map, dict_multimap
+
+class DataTransform(object):
+    def __init__(self,
+        template_mmcif_dir: str,
+        max_template_date: str,
+        config: mlc.ConfigDict,
+        kalign_binary_path: str = '/usr/bin/kalign',
+        train_mapping_path: Optional[str] = None,
+        max_template_hits: int = 4,
+        obsolete_pdbs_file_path: Optional[str] = None,
+        template_release_dates_cache_path: Optional[str] = None,
+        shuffle_top_k_prefiltered: Optional[int] = None,
+        treat_pdb_as_distillation: bool = True,
+        mode: str = "train", 
+        _output_raw: bool = False,
+        **kwargs
+    ):
+        """
+            Args:
+                data_dir:
+                    A path to a directory containing mmCIF files (in train
+                    mode) or FASTA files (in inference mode).
+                alignment_dir:
+                    A path to a directory containing only data in the format 
+                    output by an AlignmentRunner 
+                    (defined in openfold.features.alignment_runner).
+                    I.e. a directory of directories named {PDB_ID}_{CHAIN_ID}
+                    or simply {PDB_ID}, each containing .a3m, .sto, and .hhr
+                    files.
+                template_mmcif_dir:
+                    Path to a directory containing template mmCIF files.
+                config:
+                    A dataset config object. See openfold.config
+                kalign_binary_path:
+                    Path to kalign binary.
+                mapping_path:
+                    A json file containing a mapping from consecutive numerical
+                    ids to sample names (matching the directories in data_dir).
+                    Samples not in this mapping are ignored. Can be used to 
+                    implement the various training-time filters described in
+                    the AlphaFold supplement.
+                max_template_hits:
+                    An upper bound on how many templates are considered. During
+                    training, the templates ultimately used are subsampled
+                    from this total quantity.
+                template_release_dates_cache_path:
+                    Path to the output of scripts/generate_mmcif_cache.
+                obsolete_pdbs_file_path:
+                    Path to the file containing replacements for obsolete PDBs.
+                shuffle_top_k_prefiltered:
+                    Whether to uniformly shuffle the top k template hits before
+                    parsing max_template_hits of them. Can be used to
+                    approximate DeepMind's training-time template subsampling
+                    scheme much more performantly.
+                treat_pdb_as_distillation:
+                    Whether to assume that .pdb files in the data_dir are from
+                    the self-distillation set (and should be subjected to
+                    special distillation set preprocessing steps).
+                mode:
+                    "train", "val", or "predict"
+        """
+        super(DataTransform, self).__init__()
+        self.config = config
+        self.treat_pdb_as_distillation = treat_pdb_as_distillation
+        self.mode = mode
+        self._output_raw = _output_raw
+
+        valid_modes = ["train", "eval", "predict"]
+        if(mode not in valid_modes):
+            raise ValueError(f'mode must be one of {valid_modes}')
+
+        if(template_release_dates_cache_path is None):
+            logging.warning(
+                "Template release dates cache does not exist. Remember to run "
+                "scripts/generate_mmcif_cache.py before running OpenFold"
+            )
+
+        template_featurizer = templates.TemplateHitFeaturizer(
+            mmcif_dir=template_mmcif_dir,
+            max_template_date=max_template_date,
+            max_hits=max_template_hits,
+            kalign_binary_path=kalign_binary_path,
+            release_dates_path=template_release_dates_cache_path,
+            obsolete_pdbs_path=obsolete_pdbs_file_path,
+            _shuffle_top_k_prefiltered=shuffle_top_k_prefiltered,
+        )
+
+        self.data_pipeline = data_pipeline.DataPipeline(
+            template_featurizer=template_featurizer,
+        )
+
+        if(not self._output_raw):
+            self.feature_pipeline = feature_pipeline.FeaturePipeline(config) 
+
+    def _parse_mmcif(self, mmcif_string, file_id, chain_id, alignment_dir, bfd_hits, mgnify_hits, pdb70_hits, uniref90_hits):
+        mmcif_object = mmcif_parsing.parse(
+            file_id=file_id, mmcif_string=mmcif_string
+        ) 
+
+        # Crash if an error is encountered. Any parsing errors should have
+        # been dealt with at the alignment stage.
+        if(mmcif_object.mmcif_object is None):
+            raise list(mmcif_object.errors.values())[0]
+
+        mmcif_object = mmcif_object.mmcif_object
+
+        data = self.data_pipeline.process_mmcif_hfai(
+            mmcif=mmcif_object,
+            bfd_hits=bfd_hits,
+            mgnify_hits=mgnify_hits,
+            pdb70_hits=pdb70_hits,
+            uniref90_hits=uniref90_hits,
+            name=alignment_dir,
+            chain_id=chain_id,
+        )
+
+        return data
+    
+    def __call__(self, name, mmcif_string, bfd_hits, mgnify_hits, pdb70_hits, uniref90_hits):
+
+        spl = name.rsplit('_', 1)
+        if(len(spl) == 2):
+            file_id, chain_id = spl
+        else:
+            file_id, = spl
+            chain_id = None
+
+        data = self._parse_mmcif(
+            mmcif_string, file_id, chain_id, "_".join([file_id, chain_id]), bfd_hits, mgnify_hits, pdb70_hits, uniref90_hits
+        )
+ 
+        if(self._output_raw):
+            return data
+
+        feats = self.feature_pipeline.process_features(
+            data, self.mode 
+        )
+
+        return feats
 
 
 class OpenFoldSingleDataset(torch.utils.data.Dataset):
@@ -167,7 +307,6 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 file_id, = spl
                 chain_id = None
 
-            # path = os.path.join(self.data_dir, file_id)
             idx = [self.mmcif_index[file_id]]
             data = self.mmcif_reader.read(idx)
             mmcif_string = pickle.loads(data[0])
@@ -181,7 +320,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 fasta_path=path,
                 alignment_dir=alignment_dir,
             )
-        
+            
         if(self._output_raw):
             return data
 
@@ -255,6 +394,98 @@ class OpenFoldBatchCollator:
 
         stack_fn = partial(torch.stack, dim=0)
         return dict_multimap(stack_fn, processed_prots) 
+
+class OpenFoldDataLoader_hfai(ffrecord.torch.DataLoader):
+    def __init__(self, *args, config, stage="train", generator=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+        self.stage = stage    
+
+        if(generator is None):
+            generator = torch.Generator()
+        
+        self.generator = generator
+        self._prep_batch_properties_probs()
+
+    def _prep_batch_properties_probs(self):
+        keyed_probs = []
+        stage_cfg = self.config[self.stage]
+
+        max_iters = self.config.common.max_recycling_iters
+        if(stage_cfg.supervised):
+            clamp_prob = self.config.supervised.clamp_prob
+            keyed_probs.append(
+                ("use_clamped_fape", [1 - clamp_prob, clamp_prob])
+            )
+            if(self.config.supervised.uniform_recycling):
+                recycling_probs = [
+                    1. / (max_iters + 1) for _ in range(max_iters + 1)
+                ]
+                keyed_probs.append(
+                    ("no_recycling_iters", recycling_probs)
+                )
+        else:
+            recycling_probs = [
+                0. for _ in range(max_iters + 1)
+            ]
+            recycling_probs[-1] = 1.
+            keyed_probs.append(
+                ("no_recycling_iters", recycling_probs)
+            )
+
+        keys, probs = zip(*keyed_probs)
+        max_len = max([len(p) for p in probs])
+        padding = [[0.] * (max_len - len(p)) for p in probs] 
+        
+        self.prop_keys = keys
+        self.prop_probs_tensor = torch.tensor(
+            [p + pad for p, pad in zip(probs, padding)],
+            dtype=torch.float32,
+        )
+
+    def _add_batch_properties(self, batch):
+        samples = torch.multinomial(
+            self.prop_probs_tensor,
+            num_samples=1, # 1 per row
+            replacement=True,
+            generator=self.generator
+        )
+
+        aatype = batch["aatype"]
+        batch_dims = aatype.shape[:-2]
+        recycling_dim = aatype.shape[-1]
+        no_recycling = recycling_dim
+        for i, key in enumerate(self.prop_keys):
+            sample = int(samples[i][0])
+            sample_tensor = torch.tensor(
+                sample, 
+                device=aatype.device, 
+                requires_grad=False
+            )
+            orig_shape = sample_tensor.shape
+            sample_tensor = sample_tensor.view(
+                (1,) * len(batch_dims) + sample_tensor.shape + (1,)
+            )
+            sample_tensor = sample_tensor.expand(
+                batch_dims + orig_shape + (recycling_dim,)
+            )
+            batch[key] = sample_tensor
+
+            if(key == "no_recycling_iters"):
+                no_recycling = sample 
+        
+        resample_recycling = lambda t: t[..., :no_recycling + 1]
+        batch = tensor_tree_map(resample_recycling, batch)
+        return batch
+
+    def __iter__(self):
+        it = super().__iter__()
+
+        def _batch_prop_gen(iterator):
+            for batch in iterator:
+                yield self._add_batch_properties(batch)
+
+        return _batch_prop_gen(it)
 
 
 class OpenFoldDataLoader(torch.utils.data.DataLoader):
@@ -430,9 +661,21 @@ class OpenFoldDataModule(pl.LightningDataModule):
             obsolete_pdbs_file_path=
                 self.obsolete_pdbs_file_path,
         )
+        
+        transfom_gen = partial(DataTransform,
+            template_mmcif_dir=self.template_mmcif_dir,
+            max_template_date=self.max_template_date,
+            config=self.config,
+            kalign_binary_path=self.kalign_binary_path,
+            template_release_dates_cache_path=
+                self.template_release_dates_cache_path,
+            obsolete_pdbs_file_path=
+                self.obsolete_pdbs_file_path,
+        )
 
-        if(self.training_mode):        
-            self.train_dataset = dataset_gen(
+
+        if(self.training_mode):
+            transforms = transfom_gen(
                 data_dir=self.train_data_dir,
                 alignment_dir=self.train_alignment_dir,
                 mapping_path=self.train_mapping_path,
@@ -443,6 +686,8 @@ class OpenFoldDataModule(pl.LightningDataModule):
                 mode="train",
                 _output_raw=True,
             )
+            
+            self.train_dataset = AlphafoldData(transform=transforms)
 
             if(self.distillation_data_dir is not None):
                 distillation_dataset = dataset_gen(
@@ -516,7 +761,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
         if replace_ddp_sampler:
             dataloader_args["sampler"] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=True)
 
-        dl = OpenFoldDataLoader(
+        dl = OpenFoldDataLoader_hfai(
             **dataloader_args
         )
 

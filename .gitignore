@@ -3,7 +3,11 @@ __pycache__
 openfold/__pycache__
 openfold/.ipynb_checkpoints
 checkpoint
-./data
+data/*
 run_process.py
 gen_processed_mmcif.py
 *.pyc
+experiments
+dataset_convert
+others
+run_train_local.py

@@ -560,20 +560,21 @@ class DataPipeline:
     def __init__(
         self,
         template_featurizer: Optional[templates.TemplateHitFeaturizer],
-        alignment_dir,
-        data_dir,
+        alignment_dir=None,
+        data_dir=None,
     ):
         self.template_featurizer = template_featurizer
         self.alignment_dir = alignment_dir
         self.data_dir = data_dir
-        self.bfd_reader = FileReader(os.path.join(self.alignment_dir, "bfd_small_hits.ffr"))
-        self.mgnify_reader = FileReader(os.path.join(self.alignment_dir, "mgnify_hits.ffr"))
-        self.pdb70_reader = FileReader(os.path.join(self.alignment_dir, "pdb70_hits.ffr"))
-        self.uniref90_reader = FileReader(os.path.join(self.alignment_dir, "uniref90_hits.ffr"))
-        with open(os.path.join(self.data_dir, "mmcif_processed_index.pkl"), "rb") as fp:
-            self.mmcif_index = pickle.load(fp)
-        with open(os.path.join(self.alignment_dir, "alignments_index.pkl"), "rb") as fp:
-            self.align_index = pickle.load(fp)
+        if alignment_dir is not None:
+            self.bfd_reader = FileReader(os.path.join(self.alignment_dir, "bfd_small_hits.ffr"))
+            self.mgnify_reader = FileReader(os.path.join(self.alignment_dir, "mgnify_hits.ffr"))
+            self.pdb70_reader = FileReader(os.path.join(self.alignment_dir, "pdb70_hits.ffr"))
+            self.uniref90_reader = FileReader(os.path.join(self.alignment_dir, "uniref90_hits.ffr"))
+            with open(os.path.join(self.data_dir, "mmcif_processed_index.pkl"), "rb") as fp:
+                self.mmcif_index = pickle.load(fp)
+            with open(os.path.join(self.alignment_dir, "alignments_index.pkl"), "rb") as fp:
+                self.align_index = pickle.load(fp)
 
 
     def _parse_msa_data(
@@ -633,6 +634,62 @@ class DataPipeline:
         #         all_hits[f] = hits
 
         return all_hits
+
+    def _parse_template_hits_hfai(
+        self,
+        pdb70_hits,
+    ) -> Mapping[str, Any]:
+        all_hits = {}
+        hits = parsers.parse_hhr(pdb70_hits)
+        all_hits["pdb70_hits.hhr"] = hits
+        return all_hits
+
+    def _parse_msa_data_hfai(
+        self,
+        bfd_hits, mgnify_hits, uniref90_hits
+    ) -> Mapping[str, Any]:
+        msa_data = {}
+        msa, deletion_matrix = parsers.parse_a3m(mgnify_hits)
+        msa_data["mgnify_hits.a3m"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        msa, deletion_matrix = parsers.parse_a3m(uniref90_hits)
+        msa_data["uniref90_hits.a3m"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        msa, deletion_matrix, _ = parsers.parse_stockholm(bfd_hits)
+        msa_data["small_bfd_hits.sto"] = {"msa": msa, "deletion_matrix": deletion_matrix}
+        return msa_data
+
+
+    def _process_msa_feats_hfai(
+        self,
+        bfd_hits, mgnify_hits, uniref90_hits,
+        input_sequence: Optional[str] = None,
+    ) -> Mapping[str, Any]:
+        msa_data = self._parse_msa_data_hfai(bfd_hits, mgnify_hits, uniref90_hits)
+       
+        if(len(msa_data) == 0):
+            if(input_sequence is None):
+                raise ValueError(
+                    """
+                    If the alignment dir contains no MSAs, an input sequence 
+                    must be provided.
+                    """
+                )
+            msa_data["dummy"] = {
+                "msa": [input_sequence],
+                "deletion_matrix": [[0 for _ in input_sequence]],
+            }
+
+        msas, deletion_matrices = zip(*[
+            (v["msa"], v["deletion_matrix"]) for v in msa_data.values()
+        ])
+        
+        
+        msa_features = make_msa_features(
+            msas=msas,
+            deletion_matrices=deletion_matrices,
+        )
+
+        return msa_features
+
 
     def _process_msa_feats(
         self,
@@ -731,12 +788,51 @@ class DataPipeline:
             input_sequence,
             hits,
             self.template_featurizer,
-            query_release_date=to_date(mmcif.header["release_date"])
+            query_release_date=to_date(mmcif.header["release_date"]),
+            query_pdb_code=alignment_dir
         )
         
         msa_features = self._process_msa_feats(alignment_dir, input_sequence)
 
         return {**mmcif_feats, **template_features, **msa_features}
+
+    def process_mmcif_hfai(
+        self,
+        mmcif: mmcif_parsing.MmcifObject,  # parsing is expensive, so no path
+        bfd_hits, mgnify_hits, pdb70_hits, uniref90_hits,
+        name,
+        chain_id: Optional[str] = None,
+    ) -> FeatureDict:
+        """
+            Assembles features for a specific chain in an mmCIF object.
+
+            If chain_id is None, it is assumed that there is only one chain
+            in the object. Otherwise, a ValueError is thrown.
+        """
+        
+        if chain_id is None:
+            chains = mmcif.structure.get_chains()
+            chain = next(chains, None)
+            if chain is None:
+                raise ValueError("No chains in mmCIF file")
+            chain_id = chain.id
+
+        mmcif_feats = make_mmcif_features(mmcif, chain_id)
+
+        input_sequence = mmcif.chain_to_seqres[chain_id]
+        hits = self._parse_template_hits_hfai(pdb70_hits)
+        template_features = make_template_features(
+            input_sequence,
+            hits,
+            self.template_featurizer,
+            query_release_date=to_date(mmcif.header["release_date"]),
+            query_pdb_code=name
+        )
+        
+        msa_features = self._process_msa_feats_hfai(bfd_hits, mgnify_hits, uniref90_hits, input_sequence)
+
+        return {**mmcif_feats, **template_features, **msa_features}
+
 
     def process_pdb(
         self,

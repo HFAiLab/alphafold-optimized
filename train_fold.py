@@ -9,9 +9,7 @@ from hfai.nn.parallel import DistributedDataParallel as hfai_DDP
 from torch.nn.parallel import DistributedDataParallel as torch_DDP
 
 from openfold.config import model_config
-from openfold.data.data_modules import (
-    OpenFoldDataModule,
-)
+from openfold.data.data_modules import OpenFoldDataModule
 from openfold.model.model import AlphaFold
 from openfold.utils.exponential_moving_average import ExponentialMovingAverage
 from openfold.utils.argparse import remove_arguments
@@ -34,13 +32,13 @@ def main(local_rank, args):
     torch.distributed.init_process_group(backend='nccl', init_method='tcp://{}:{}'.format(ip, port), world_size=hosts*args.gpus, rank=rank*args.gpus+local_rank)    
     
     torch.cuda.set_device(local_rank)
-
+    
     config = model_config(
         "model_1", 
         train=True, 
         low_prec=(args.precision == 16)
     ) 
-    
+
     model = AlphaFold(config).cuda()
     if not os.path.exists(args.ckpt_path):
         os.mkdir(args.ckpt_path)
@@ -74,10 +72,10 @@ def main(local_rank, args):
     log = logging.getLogger()
     handler = logging.StreamHandler()
     log.addHandler(handler)
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.ERROR)
     if local_rank == 0:
         log.info(f'Preparing training data')
-    
+
     data_module = OpenFoldDataModule(
         config=config.data, 
         batch_seed=args.seed,
@@ -85,7 +83,7 @@ def main(local_rank, args):
     )
     data_module.prepare_data()
     data_module.setup()
-    
+
     epoch_num = 10
     for epoch in range(epoch_num):
         if local_rank == 0:
@@ -106,7 +104,8 @@ def main(local_rank, args):
             
             if local_rank == 0:
                 batch_loss.append(loss.item())
-                log.info(f'Epoch: {epoch} Step: {idx+1}/{len(dataloader)} Loss: {round(sum(batch_loss)/len(batch_loss), 4)}')
+                print(f'Epoch: {epoch} Step: {idx+1}/{len(dataloader)} Loss: {round(sum(batch_loss)/len(batch_loss), 4)}',flush=True)
+            del batch, output, target, loss
         
         if local_rank == 0:
             torch.save(modelEMA.state_dict(), os.path.join(args.ckpt_path, "alphafold_ema.pth"))
