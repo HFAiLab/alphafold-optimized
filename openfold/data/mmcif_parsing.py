@@ -205,14 +205,14 @@ def parse(
         log = logging.getLogger()
         handler = logging.StreamHandler()
         log.addHandler(handler)
-        cachePath = f"../full_dataset/mmcif_parse_cache/{file_id}.pkl"
-        if os.path.exists(cachePath):
-            # log.critical(f"Cache for protein {file_id} found, using cached data")
-            try:
-                return pickle.load(open(cachePath, "rb"))
-            except Exception as e:
-                log.warning(f"Bad parsing cache file: {cachePath} for error:{e}")
-                os.remove(cachePath)
+        # cachePath = f"../full_dataset/mmcif_parse_cache/{file_id}.pkl"
+        # if os.path.exists(cachePath):
+        #     # log.critical(f"Cache for protein {file_id} found, using cached data")
+        #     try:
+        #         return pickle.load(open(cachePath, "rb"))
+        #     except Exception as e:
+        #         log.warning(f"Bad parsing cache file: {cachePath} for error:{e}")
+        #         os.remove(cachePath)
         
         parser = PDB.MMCIFParser(QUIET=True)
         handle = io.StringIO(mmcif_string)
@@ -321,7 +321,7 @@ def parse(
       
         # Cache parsing result
         result = ParsingResult(mmcif_object=mmcif_object, errors=errors)
-        safe_pickle_dump(cachePath, result)
+        # safe_pickle_dump(cachePath, result)
         
         return result
     except Exception as e:  # pylint:disable=broad-except
